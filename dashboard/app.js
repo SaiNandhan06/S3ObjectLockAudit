@@ -129,6 +129,15 @@
     }
   }
 
+  function updateGitHubLoginUrls() {
+    const clientId = state.githubClientId || "Ov23liauExample";
+    const oauthUrl = `https://github.com/login/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=read:user`;
+    const btnHero = el("btn-hero-login-github");
+    if (btnHero) btnHero.href = oauthUrl;
+    const btnNav = el("btn-login-github");
+    if (btnNav) btnNav.href = oauthUrl;
+  }
+
   function renderAuthUI() {
     const profileBadge = el("user-profile-badge");
     const authControls = el("auth-controls");
@@ -136,8 +145,16 @@
     const roleBadge = el("user-role-badge");
     const actionRoleText = el("action-role-text");
     const adminDeleteBtn = el("btn-attempt-admin-delete");
+    const viewLogin = el("view-login");
+    const viewDashboard = el("view-dashboard");
+
+    updateGitHubLoginUrls();
 
     if (state.currentUser && state.sessionToken) {
+      // Logged-in view: show dashboard, hide login view
+      if (viewLogin) viewLogin.style.display = "none";
+      if (viewDashboard) viewDashboard.style.display = "block";
+
       if (profileBadge) profileBadge.style.display = "flex";
       if (authControls) authControls.style.display = "none";
       if (loginName) loginName.textContent = state.currentUser.githubLogin;
@@ -154,6 +171,10 @@
         adminDeleteBtn.style.display = state.currentUser.role === "admin" ? "inline-flex" : "none";
       }
     } else {
+      // Logged-out view: show login view, hide dashboard
+      if (viewLogin) viewLogin.style.display = "flex";
+      if (viewDashboard) viewDashboard.style.display = "none";
+
       if (profileBadge) profileBadge.style.display = "none";
       if (authControls) authControls.style.display = "flex";
       if (actionRoleText) actionRoleText.textContent = "UNAUTHENTICATED";
@@ -186,6 +207,7 @@
     decodeAndApplySession();
     renderAuthUI();
     showToast(`Switched active session to ${username} (${role.toUpperCase()})`, "success");
+    loadRecords();
     // Also re-render detail drawer buttons if currently open
     if (state.selectedRecord) {
       renderRecordDetail(state.selectedRecord);
@@ -865,6 +887,13 @@
       }
     });
 
+    el("btn-quick-admin")?.addEventListener("click", () => {
+      simulateRoleLogin("admin", "sai-admin");
+    });
+    el("btn-quick-user")?.addEventListener("click", () => {
+      simulateRoleLogin("user", "auditor-1");
+    });
+
     el("btn-simulate-admin")?.addEventListener("click", () => {
       roleWrapper.classList.remove("open");
       simulateRoleLogin("admin", "sai-admin");
@@ -882,6 +911,7 @@
         decodeAndApplySession();
         renderAuthUI();
         showToast("Custom token set", "success");
+        loadRecords();
       }
     });
 
@@ -906,9 +936,12 @@
       state.githubClientId = newClientId;
       localStorage.setItem("auditlock_api_base", state.apiBase);
       localStorage.setItem("auditlock_gh_client_id", state.githubClientId);
+      updateGitHubLoginUrls();
       el("settings-modal").style.display = "none";
       showToast("Settings updated", "success");
-      loadRecords();
+      if (state.sessionToken) {
+        loadRecords();
+      }
     });
   }
 
@@ -917,11 +950,15 @@
     loadRecords,
     openRecordDetail,
     simulateRoleLogin,
+    logout,
   };
 
   document.addEventListener("DOMContentLoaded", () => {
     initAuth();
     initEventListeners();
-    loadRecords();
+    // B6: Only attempt API calls when authenticated
+    if (state.sessionToken) {
+      loadRecords();
+    }
   });
 })();
