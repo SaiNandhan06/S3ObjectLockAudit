@@ -85,13 +85,45 @@ Open your browser at `http://localhost:3000`.
 
 ---
 
-## 5. API Reference
+## 5. API Reference & Authentication
 
-| Method | Route | Lambda | Description |
-|---|---|---|---|
-| `POST` | `/uploads/presign` | `create-presigned-upload` | Request 5-min presigned S3 upload URL |
-| `POST` | `/records` | `create-record` | Register record in `AuditRecords` |
-| `GET` | `/records` | `list-records` | List all tracked records |
-| `GET` | `/records/{id}` | `get-record-detail` | Get record, live S3 status, and event log |
-| `POST` | `/records/{id}/delete-attempt` | `delete-attempt-limited` | Attempt delete without bypass rights |
-| `POST` | `/records/{id}/delete-attempt-admin` | `delete-attempt-admin` | Attempt delete with governance bypass |
+Base URL: `https://6yl1sp5oa7.execute-api.us-east-1.amazonaws.com`
+
+Routes marked with 🔒 require `Authorization: Bearer <session token>` (enforced by `session-authorizer`). Read-only endpoints (`GET /records` and `GET /records/{id}`) are deliberately left unauthenticated for open, third-party audit transparency and evidence reconciliation.
+
+| Method | Route | Lambda | Auth Required | Description |
+|---|---|---|:---:|---|
+| `POST` | `/uploads/presign` | `create-presigned-upload` | 🔒 Yes | Request 5-min presigned S3 upload URL |
+| `POST` | `/records` | `create-record` | 🔒 Yes | Register record in `AuditRecords` |
+| `GET` | `/records` | `list-records` | No (Open) | List all tracked audit records |
+| `GET` | `/records/{id}` | `get-record-detail` | No (Open) | Get record, live S3 status, and event timeline |
+| `POST` | `/records/{id}/delete-attempt` | `delete-attempt-limited` | 🔒 Yes | Attempt delete without bypass rights (expects DENIED) |
+| `POST` | `/records/{id}/delete-attempt-admin` | `delete-attempt-admin` | 🔒 Yes | Attempt delete with bypass rights (admin-only) |
+| `GET` | `/auth/callback` | `github-oauth-callback` | No (OAuth) | GitHub OAuth redirect callback target |
+
+---
+
+## 6. Route Protection Setup (B4)
+
+In AWS API Gateway (`auditlock-dashboard-api`):
+1. **Create Lambda Authorizer**:
+   - Navigation: **Authorization** → **Manage authorizers** → **Create**.
+   - Type: **Lambda**
+   - Name: `session-authorizer`
+   - Lambda Function: `session-authorizer`
+   - Payload format version: **2.0**
+   - Authorizer response mode: **Simple** (enable simple responses)
+   - Identity sources: `$request.header.Authorization`
+2. **Attach Authorizer to Routes**:
+   - Under **Routes**, select each route → **Attach authorizer** → select `session-authorizer`:
+     - `POST /records`
+     - `POST /uploads/presign`
+     - `POST /records/{id}/delete-attempt`
+     - `POST /records/{id}/delete-attempt-admin`
+3. **Leave Open**:
+   - `GET /records`
+   - `GET /records/{id}`
+   - `GET /auth/callback`
+4. **Deploy**:
+   - Deploy changes to the `$default` stage.
+
