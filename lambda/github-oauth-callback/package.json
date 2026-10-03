@@ -1,0 +1,12 @@
+{
+  "name": "github-oauth-callback",
+  "version": "1.0.0",
+  "description": "Exchanges GitHub OAuth code, retrieves profile, and mints signed 12-hour session tokens",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": ["oauth", "github", "lambda", "auth"],
+  "author": "",
+  "license": "ISC"
+}
