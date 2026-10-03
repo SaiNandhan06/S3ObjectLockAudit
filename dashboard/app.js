@@ -7,9 +7,12 @@
 (() => {
   // --- Global State & Configuration ---
   const REMOTE_API_GATEWAY = "https://6yl1sp5oa7.execute-api.us-east-1.amazonaws.com";
-  const DEFAULT_API_BASE = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
-    ? "/api"
-    : REMOTE_API_GATEWAY;
+  const isProxiedHost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname.endsWith(".vercel.app") ||
+    window.location.hostname.includes("vercel");
+  const DEFAULT_API_BASE = isProxiedHost ? "/api" : REMOTE_API_GATEWAY;
   const S3_BUCKET_NAME = "s3objectlock-auditlock-locked";
 
   const state = {
