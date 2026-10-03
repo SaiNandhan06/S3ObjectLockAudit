@@ -51,14 +51,14 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: CORS_HEADERS, body: JSON.stringify({ message: "OK" }) };
   }
 
-  // 1. Extract authorizer context (HTTP API simple-response context)
-  const authContext =
+  // 1. Read authorizer context (HTTP API Lambda authorizer simple-response context)
+  const authorizer =
     (event.requestContext && event.requestContext.authorizer && event.requestContext.authorizer.lambda) ||
     (event.requestContext && event.requestContext.authorizer) ||
     {};
 
-  const githubLogin = authContext.githubLogin || authContext.principalId || "api-caller";
-  const role = authContext.role || "user";
+  const githubLogin = authorizer.githubLogin || "unknown";
+  const role = authorizer.role || "user";
 
   // 2. SERVER-SIDE ROLE ENFORCEMENT (Prompt B5)
   // If role is not admin, reject immediately with 403 BEFORE attempting any S3 or DynamoDB action.
