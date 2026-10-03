@@ -1,0 +1,12 @@
+{
+  "name": "session-authorizer",
+  "version": "1.0.0",
+  "description": "API Gateway HTTP API Lambda authorizer with simple response format 2.0 and HMAC-SHA256 signature verification",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": ["authorizer", "jwt", "hmac", "lambda"],
+  "author": "",
+  "license": "ISC"
+}
