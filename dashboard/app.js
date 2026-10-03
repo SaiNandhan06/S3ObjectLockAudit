@@ -581,10 +581,17 @@
   function handleFileSelected(file) {
     if (!file) return;
 
+    if (!state.sessionToken) {
+      showToast("Please log in to upload files.", "error");
+      renderAuthUI();
+      return;
+    }
+
     // Validate type
-    const mime = file.type || (file.name.endsWith(".txt") ? "text/plain" : "application/octet-stream");
+    const mime = file.type || (file.name.endsWith(".txt") ? "text/plain" : (file.name.endsWith(".pdf") ? "application/pdf" : "application/octet-stream"));
     if (!ALLOWED_CONTENT_TYPES.has(mime)) {
-      showUploadAlert(`Invalid file format (${mime || "unknown"}). Allowed formats: PDF, TXT, PNG, JPEG.`, "error");
+      showUploadAlert(`Invalid file format (${mime || "unrecognized"}). Allowed formats: PDF, TXT, PNG, JPEG.`, "error");
+      clearSelectedFile();
       return;
     }
 
@@ -629,6 +636,12 @@
   }
 
   async function executeUpload() {
+    if (!state.sessionToken) {
+      showToast("Please log in to upload files.", "error");
+      renderAuthUI();
+      return;
+    }
+
     if (!state.selectedFile) return;
     const file = state.selectedFile;
     const mime = file.type || (file.name.endsWith(".txt") ? "text/plain" : "application/pdf");
@@ -639,7 +652,7 @@
     startBtn.disabled = true;
 
     try {
-      // Step 1: Call POST /uploads/presign
+      // Step 1: Call POST /uploads/presign with file's name and MIME type
       updateUploadProgress("Requesting presigned upload URL from API...", 25);
       
       const presignRes = await apiFetch("/uploads/presign", {
@@ -662,15 +675,15 @@
       const presignData = await presignRes.json();
       const { uploadUrl, s3Bucket, s3Key } = presignData;
 
-      // Step 2: Stream raw file directly to S3 uploadUrl
+      // Step 2: PUT raw file directly to uploadUrl (not through the API)
       updateUploadProgress("Uploading directly to S3 Object Lock bucket...", 50);
 
-      await uploadFileToS3(uploadUrl, file, mime, (percent) => {
+      const uploadResult = await uploadFileToS3(uploadUrl, file, mime, (percent) => {
         const overall = 50 + percent * 0.35; // 50% to 85%
         updateUploadProgress(`Uploading directly to S3: ${Math.round(percent)}%`, overall);
       });
 
-      // Step 3: Register record metadata via POST /records
+      // Step 3: Register record metadata via POST /records with retentionMode "NONE" (or selected)
       updateUploadProgress("Registering record in DynamoDB AuditRecords...", 90);
 
       let retentionUntil = null;
@@ -683,8 +696,8 @@
         fileName: file.name,
         s3Bucket: s3Bucket || S3_BUCKET_NAME,
         s3Key: s3Key,
-        s3VersionId: "v-" + Date.now().toString(36), // Version placeholder registered at upload
-        retentionMode: retentionMode,
+        s3VersionId: uploadResult.versionId || `v-${Date.now()}`,
+        retentionMode: retentionMode || "NONE",
         retentionUntil: retentionUntil,
         isDemoObject: true,
       };
@@ -702,10 +715,11 @@
 
       const createdRecord = await recordRes.json();
 
+      // Step 4: Show upload progress and clear success state
       updateUploadProgress("Complete!", 100);
       showToast(`Successfully registered audit record for ${file.name}`, "success");
 
-      // Reset upload panel
+      // Step 5: On success, refresh records list
       setTimeout(() => {
         el("upload-progress-box").style.display = "none";
         el("upload-panel").style.display = "none";
@@ -743,7 +757,8 @@
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(xhr.response);
+          const versionId = xhr.getResponseHeader("x-amz-version-id") || xhr.getResponseHeader("ETag")?.replace(/"/g, "") || `v-${Date.now()}`;
+          resolve({ response: xhr.response, versionId });
         } else {
           reject(new Error(`S3 PUT failed with status ${xhr.status}: ${xhr.statusText}`));
         }
