@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AuditLock | S3 Immutable Object Lock Vault & Audit Trail</title>
+  <meta name="description" content="Cryptographically verified Write-Once-Read-Many (WORM) audit record management powered by AWS S3 Object Lock, DynamoDB audit logs, and IAM privilege boundaries." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Ambient background glow layers -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Header / Navigation Bar -->
+  <header class="app-header" id="app-header">
+    <div class="header-container">
+      <div class="brand-group">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            <circle cx="12" cy="16" r="1.5" fill="currentColor"></circle>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <div class="brand-title">
+            <span>Audit</span><span class="gradient-text">Lock</span>
+          </div>
+          <div class="brand-subtitle">S3 Object Lock Immutable Vault</div>
+        </div>
+      </div>
+
+      <div class="system-status-pills">
+        <div class="status-pill" id="pill-api-status" title="API Gateway Connection">
+          <span class="pulse-dot active" id="api-status-dot"></span>
+          <span class="pill-label">API:</span>
+          <span class="pill-value" id="api-status-text">Connected</span>
+        </div>
+        <div class="status-pill" id="pill-region">
+          <span class="pill-label">Region:</span>
+          <span class="pill-value">us-east-1</span>
+        </div>
+        <div class="status-pill s3-bucket-pill" id="pill-bucket" title="Target S3 Object Lock Bucket">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+          </svg>
+          <span class="pill-value code-font">s3objectlock-auditlock-locked</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Logged In Profile UI -->
+        <div class="user-profile-badge" id="user-profile-badge" style="display: none;">
+          <div class="user-avatar-circle" id="user-avatar">GH</div>
+          <div class="user-meta">
+            <span class="user-name" id="user-login-name">user</span>
+            <span class="role-badge" id="user-role-badge">USER</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-logout" title="End authenticated session">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Logout
+          </button>
+        </div>
+
+        <!-- Logged Out Auth Controls -->
+        <div class="auth-controls" id="auth-controls">
+          <button class="btn btn-github" id="btn-login-github" title="Authorize via GitHub OAuth">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+            </svg>
+            Log in with GitHub
+          </button>
+
+          <!-- Fast Role Switcher (Simulated Session for testing both roles without OAuth setup) -->
+          <div class="dropdown-wrapper" id="sim-role-dropdown">
+            <button class="btn btn-secondary btn-icon" id="btn-demo-roles" title="Quick Role Emulation (for evaluation)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7.5" r="4"></circle>
+                <line x1="20" y1="8" x2="20" y2="14"></line>
+                <line x1="23" y1="11" x2="17" y2="11"></line>
+              </svg>
+              <span>Test Role</span>
+            </button>
+            <div class="dropdown-menu" id="role-menu">
+              <div class="dropdown-header">Fast Role Emulation</div>
+              <button class="dropdown-item" id="btn-simulate-admin">
+                <span class="role-dot role-dot-admin"></span>
+                <div>
+                  <div class="item-title">Admin Account (sai-admin)</div>
+                  <div class="item-sub">Has bypass rights & admin override</div>
+                </div>
+              </button>
+              <button class="dropdown-item" id="btn-simulate-user">
+                <span class="role-dot role-dot-user"></span>
+                <div>
+                  <div class="item-title">Standard Auditor (auditor-1)</div>
+                  <div class="item-sub">Regular role, delete attempts denied</div>
+                </div>
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="btn-custom-token">
+                <div class="item-title">Enter Custom Bearer Token...</div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn btn-icon-only" id="btn-open-settings" title="Endpoint & API Configuration">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Container -->
+  <main class="main-content" id="main-content">
+    
+    <!-- Hero / Metrics Section -->
+    <section class="metrics-grid">
+      <div class="metric-card glass-panel">
+        <div class="metric-header">
+          <span class="metric-title">Tracked Audit Records</span>
+          <div class="metric-icon icon-records">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value" id="metric-total-records">--</div>
+        <div class="metric-footer">
+          <span class="metric-tag tag-primary">DynamoDB AuditRecords</span>
+        </div>
+      </div>
+
+      <div class="metric-card glass-panel">
+        <div class="metric-header">
+          <span class="metric-title">Active Governance Locks</span>
+          <div class="metric-icon icon-lock">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value" id="metric-locked-records">--</div>
+        <div class="metric-footer">
+          <span class="metric-tag tag-warning">WORM Protected</span>
+        </div>
+      </div>
+
+      <div class="metric-card glass-panel">
+        <div class="metric-header">
+          <span class="metric-title">Legal Holds Active</span>
+          <div class="metric-icon icon-shield">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value" id="metric-legal-holds">--</div>
+        <div class="metric-footer">
+          <span class="metric-tag tag-danger">No-Bypass Protection</span>
+        </div>
+      </div>
+
+      <div class="metric-card glass-panel">
+        <div class="metric-header">
+          <span class="metric-title">Security Proof Status</span>
+          <div class="metric-icon icon-check">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="metric-value metric-status" id="metric-proof-status">ENFORCED</div>
+        <div class="metric-footer">
+          <span class="metric-tag tag-success">S3 Native WORM + CloudTrail</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Top Action Bar & Upload Trigger -->
+    <section class="action-bar-section">
+      <div class="action-bar-left">
+        <h1 class="section-title">Audit Records Catalog</h1>
+        <p class="section-subtitle">Real-time cryptographic audit log reconciled directly against S3 Object Lock metadata</p>
+      </div>
+      <div class="action-bar-right">
+        <button class="btn btn-secondary" id="btn-refresh-records" title="Re-fetch records from API">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin-on-load">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary" id="btn-trigger-upload">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Upload Record to Vault
+        </button>
+      </div>
+    </section>
+
+    <!-- Upload Card / Drawer (Interactive Presigned S3 Upload Flow) -->
+    <section class="upload-section glass-panel" id="upload-panel" style="display: none;">
+      <div class="panel-header">
+        <div class="panel-title-group">
+          <div class="panel-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 class="panel-title">Upload Audit Record</h3>
+            <p class="panel-desc">Direct presigned browser upload to S3 Object Lock bucket with metadata registration</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btn-close-upload">&times;</button>
+      </div>
+
+      <div class="upload-form-grid">
+        <!-- Drag & Drop Zone -->
+        <div class="drop-zone" id="drop-zone">
+          <input type="file" id="file-input" accept=".pdf,.txt,.png,.jpg,.jpeg" class="file-input-hidden" />
+          <div class="drop-zone-content">
+            <div class="drop-icon">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+                <path d="M12 12v9"></path>
+                <path d="m16 16-4-4-4 4"></path>
+              </svg>
+            </div>
+            <div class="drop-text-primary">Click to select file or drag & drop</div>
+            <div class="drop-text-secondary">Allowed formats: <span class="tag-pill">PDF</span> <span class="tag-pill">TXT</span> <span class="tag-pill">PNG</span> <span class="tag-pill">JPEG</span> (Max 100MB)</div>
+          </div>
+          <!-- Selected File Preview -->
+          <div class="file-preview-card" id="file-preview-card" style="display: none;">
+            <div class="file-info-col">
+              <div class="file-name" id="preview-filename">audit-document.pdf</div>
+              <div class="file-details">
+                <span id="preview-filesize">0 KB</span> • <span id="preview-filetype" class="code-font">application/pdf</span>
+              </div>
+            </div>
+            <button class="btn-remove-file" id="btn-remove-file" title="Choose another file">&times;</button>
+          </div>
+        </div>
+
+        <!-- Retention Settings & Actions -->
+        <div class="upload-config-col">
+          <div class="form-group">
+            <label class="form-label" for="retention-mode-select">Initial Retention Mode</label>
+            <select class="form-control" id="retention-mode-select">
+              <option value="NONE" selected>NONE (Upload first, apply lock separately)</option>
+              <option value="GOVERNANCE">GOVERNANCE (Locked against deletion)</option>
+            </select>
+            <span class="form-hint">Per project guidelines, retention is applied intentionally and can be configured per-object.</span>
+          </div>
+
+          <div class="form-group" id="retention-duration-group" style="display: none;">
+            <label class="form-label" for="retention-duration-input">Retention Window (Minutes)</label>
+            <input type="number" class="form-control" id="retention-duration-input" value="10" min="1" max="1440" />
+            <span class="form-hint">Short test retention (minutes) for compliance contrast verification.</span>
+          </div>
+
+          <div class="upload-progress-box" id="upload-progress-box" style="display: none;">
+            <div class="progress-labels">
+              <span class="progress-status-text" id="progress-step-text">Requesting presigned upload URL...</span>
+              <span class="progress-percent" id="progress-percent-text">0%</span>
+            </div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="alert-banner" id="upload-alert" style="display: none;"></div>
+
+          <div class="upload-action-footer">
+            <button class="btn btn-secondary" id="btn-cancel-upload">Cancel</button>
+            <button class="btn btn-primary" id="btn-start-upload" disabled>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Upload & Register
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filter & Search Toolbar -->
+    <section class="catalog-toolbar glass-panel">
+      <div class="search-box">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="filter-search-input" placeholder="Filter by file name or record ID..." />
+      </div>
+
+      <div class="filter-group">
+        <span class="filter-label">Filter:</span>
+        <button class="filter-chip active" data-filter="ALL">All Records</button>
+        <button class="filter-chip" data-filter="GOVERNANCE">Locked (Governance)</button>
+        <button class="filter-chip" data-filter="NONE">Unlocked (NONE)</button>
+        <button class="filter-chip" data-filter="LEGAL_HOLD">Legal Hold</button>
+      </div>
+    </section>
+
+    <!-- Records Table View (B8) -->
+    <section class="table-container glass-panel">
+      <table class="data-table" id="records-table">
+        <thead>
+          <tr>
+            <th>File Name</th>
+            <th>Retention Mode</th>
+            <th>Retain-Until</th>
+            <th>Legal Hold</th>
+            <th>Upload Date</th>
+            <th>Record ID</th>
+            <th class="th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="records-tbody">
+          <!-- Dynamic Records Rows Populated by app.js -->
+          <tr class="loading-row">
+            <td colspan="7">
+              <div class="loading-state">
+                <div class="spinner"></div>
+                <span>Fetching audit records from API Gateway...</span>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- Record Detail Modal / Drawer (B8) -->
+  <div class="modal-backdrop" id="detail-modal" style="display: none;">
+    <div class="modal-card glass-panel-modal">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="record-type-badge" id="modal-file-icon">DOC</div>
+          <div>
+            <h2 class="modal-title" id="modal-file-name">filename.txt</h2>
+            <div class="modal-subtitle code-font" id="modal-record-id">record-id-uuid</div>
+          </div>
+        </div>
+        <button class="btn-close" id="btn-close-detail">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Live S3 Status vs Stored Record -->
+        <div class="status-comparison-grid">
+          <div class="status-card live-status-card">
+            <div class="status-card-header">
+              <span class="status-indicator-live"></span>
+              <span class="status-card-title">LIVE S3 Object Lock Status</span>
+              <span class="status-verified-tag">Direct S3 Check</span>
+            </div>
+            <div class="status-details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Lock Mode:</span>
+                <span class="detail-value" id="modal-live-mode">GOVERNANCE</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Retain Until:</span>
+                <span class="detail-value" id="modal-live-until">--</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Legal Hold:</span>
+                <span class="detail-value" id="modal-live-legal-hold">OFF</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">S3 Bucket:</span>
+                <span class="detail-value code-font" id="modal-s3-bucket">--</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="status-card">
+            <div class="status-card-header">
+              <span class="status-card-title">Stored Record Metadata</span>
+              <span class="status-stored-tag">DynamoDB</span>
+            </div>
+            <div class="status-details-grid">
+              <div class="detail-item">
+                <span class="detail-label">S3 Key:</span>
+                <span class="detail-value code-font truncate" id="modal-s3-key">--</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">S3 Version ID:</span>
+                <span class="detail-value code-font truncate" id="modal-s3-version">--</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Upload Timestamp:</span>
+                <span class="detail-value" id="modal-upload-date">--</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Demo Object:</span>
+                <span class="detail-value" id="modal-demo-flag">No</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delete Test Action Center (Core WORM Verification) -->
+        <div class="test-action-center glass-panel">
+          <div class="test-action-header">
+            <div>
+              <h4 class="test-title">Object Deletion & Bypass Verification</h4>
+              <p class="test-desc">Demonstrates that S3 enforces the lock against ordinary callers while allowing authorized governance bypass</p>
+            </div>
+            <div class="role-indicator-pill" id="action-current-role-pill">
+              Role: <span id="action-role-text">USER</span>
+            </div>
+          </div>
+
+          <!-- Buttons Group -->
+          <div class="test-buttons-row">
+            <!-- Standard / Limited Delete Attempt Button -->
+            <button class="btn btn-danger-outline" id="btn-attempt-delete">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              Attempt Delete (Standard Role)
+            </button>
+
+            <!-- Admin Override Delete Button (Rendered ONLY when role is admin) -->
+            <button class="btn btn-danger" id="btn-attempt-admin-delete" style="display: none;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+              Admin Override Delete (Bypass Governance)
+            </button>
+          </div>
+
+          <!-- Delete Outcome Display Banner -->
+          <div class="delete-outcome-banner" id="delete-outcome-banner" style="display: none;">
+            <div class="outcome-icon" id="outcome-icon">
+              <!-- Injected by app.js -->
+            </div>
+            <div class="outcome-body">
+              <div class="outcome-status-line">
+                <span class="outcome-label">Result:</span>
+                <span class="outcome-badge" id="outcome-badge">DENIED</span>
+              </div>
+              <div class="outcome-reason code-font" id="outcome-reason">--</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full Audit Event Timeline (B8) -->
+        <div class="timeline-section">
+          <div class="timeline-header">
+            <h4 class="timeline-title">DynamoDB Audit Trail Timeline</h4>
+            <span class="timeline-subtitle">Immutable append-only events from <span class="code-font">RetentionEvents</span></span>
+          </div>
+
+          <div class="timeline-feed" id="timeline-feed">
+            <!-- Timeline items populated by app.js -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Settings & Endpoint Inspection Modal -->
+  <div class="modal-backdrop" id="settings-modal" style="display: none;">
+    <div class="modal-card modal-card-sm glass-panel-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">API & Endpoint Configuration</h3>
+        <button class="btn-close" id="btn-close-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="setting-api-url">API Gateway Base URL</label>
+          <input type="text" class="form-control code-font" id="setting-api-url" value="https://6yl1sp5oa7.execute-api.us-east-1.amazonaws.com" />
+          <span class="form-hint">Active AWS HTTP API Gateway stage endpoint.</span>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label" for="setting-github-client-id">GitHub OAuth Client ID</label>
+          <input type="text" class="form-control code-font" id="setting-github-client-id" placeholder="Enter your GitHub OAuth App Client ID" />
+          <span class="form-hint">Used for the "Log in with GitHub" OAuth redirect.</span>
+        </div>
+
+        <div class="endpoint-status-list">
+          <div class="endpoint-status-title">Connected API Routes</div>
+          <div class="endpoint-row">
+            <span class="method-tag method-post">POST</span>
+            <span class="route-path code-font">/uploads/presign</span>
+            <span class="route-status status-ok" id="status-presign-route">Configured</span>
+          </div>
+          <div class="endpoint-row">
+            <span class="method-tag method-post">POST</span>
+            <span class="route-path code-font">/records</span>
+            <span class="route-status status-ok">Active</span>
+          </div>
+          <div class="endpoint-row">
+            <span class="method-tag method-get">GET</span>
+            <span class="route-path code-font">/records</span>
+            <span class="route-status status-ok">Active</span>
+          </div>
+          <div class="endpoint-row">
+            <span class="method-tag method-get">GET</span>
+            <span class="route-path code-font">/records/{id}</span>
+            <span class="route-status status-ok">Active</span>
+          </div>
+          <div class="endpoint-row">
+            <span class="method-tag method-post">POST</span>
+            <span class="route-path code-font">/records/{id}/delete-attempt</span>
+            <span class="route-status status-ok">Active</span>
+          </div>
+          <div class="endpoint-row">
+            <span class="method-tag method-post">POST</span>
+            <span class="route-path code-font">/records/{id}/delete-attempt-admin</span>
+            <span class="route-status status-ok">Active</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="btn-save-settings">Save & Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
