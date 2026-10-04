@@ -127,3 +127,29 @@ In AWS API Gateway (`auditlock-dashboard-api`):
 4. **Deploy**:
    - Deploy changes to the `$default` stage.
 
+---
+
+## 7. Frontend Deployment (B9 — S3 Static Website + CloudFront)
+
+### Dedicated Frontend S3 Bucket
+- **Bucket Name**: `auditlock-dashboard-frontend-148737622933`
+- **Region**: `us-east-1`
+- **Static Website Hosting**: Enabled (`index.html` as index and error document)
+- **Bucket Policy**: Public read (`s3:GetObject`) for static web assets
+- **Live S3 Website URL**:
+  `http://auditlock-dashboard-frontend-148737622933.s3-website-us-east-1.amazonaws.com`
+
+### CloudFront Distribution Setup (Free HTTPS & Custom Domain)
+Because S3 static website endpoints are HTTP-only and modern OAuth callbacks require HTTPS, CloudFront provides the global SSL distribution:
+
+1. **Create CloudFront Distribution**:
+   - **Origin Domain**: `auditlock-dashboard-frontend-148737622933.s3-website-us-east-1.amazonaws.com` (Use the S3 website endpoint as origin)
+   - **Viewer Protocol Policy**: **Redirect HTTP to HTTPS**
+   - **Allowed HTTP Methods**: `GET, HEAD, OPTIONS`
+   - **Default Root Object**: `index.html`
+   - **Price Class**: *Use only North America and Europe* (Free-tier friendly)
+2. **Configure GitHub OAuth App & Lambda Callback**:
+   - **GitHub OAuth App**: Set **Homepage URL** to your CloudFront URL (`https://<distribution-id>.cloudfront.net`).
+   - **Lambda `github-oauth-callback`**: Set environment variable `FRONTEND_URL=https://<distribution-id>.cloudfront.net`.
+
+
