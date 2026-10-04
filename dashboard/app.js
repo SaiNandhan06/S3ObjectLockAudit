@@ -414,12 +414,34 @@
 
     try {
       const res = await apiFetch(`/records/${recordId}`);
-      if (!res.ok) {
-        throw new Error(`Failed to load record detail: HTTP ${res.status}`);
+      if (res.ok) {
+        const data = await res.json();
+        state.selectedRecord = data;
+        renderRecordDetail(data);
+      } else {
+        // Graceful fallback to record metadata from catalog list if live status check failed
+        const cached = state.records.find((r) => r.recordId === recordId);
+        const errJson = await res.json().catch(() => ({}));
+        const fallbackData = {
+          record: cached || { recordId, fileName: "Record " + recordId.slice(0, 8) },
+          liveStatus: {
+            mode: "INACCESSIBLE / DELETED",
+            retainUntilDate: null,
+            legalHold: "OFF",
+          },
+          events: [
+            {
+              eventType: "LIVE_STATUS_NOTICE",
+              actor: "s3-reconcile",
+              outcome: "NOTICE",
+              detail: errJson.error?.message || `S3 live retention query returned HTTP ${res.status}`,
+              occurredAt: new Date().toISOString(),
+            },
+          ],
+        };
+        state.selectedRecord = fallbackData;
+        renderRecordDetail(fallbackData);
       }
-      const data = await res.json();
-      state.selectedRecord = data;
-      renderRecordDetail(data);
     } catch (err) {
       console.error("Error fetching record detail:", err);
       showToast(`Error: ${err.message}`, "error");
@@ -436,7 +458,7 @@
     el("modal-file-icon").textContent = getFileExtension(record.fileName || "DOC");
     el("modal-record-id").textContent = record.recordId;
 
-    // Live S3 Status
+    // Live S3 Status (rendered strictly from liveStatus, not cached record)
     el("modal-live-mode").textContent = live.mode || "NONE";
     el("modal-live-until").textContent = formatDate(live.retainUntilDate);
     el("modal-live-legal-hold").textContent = live.legalHold || "OFF";
@@ -450,7 +472,7 @@
     el("modal-upload-date").textContent = formatDate(record.uploadDate);
     el("modal-demo-flag").textContent = record.isDemoObject ? "Yes" : "No";
 
-    // Admin Override Button visibility based on current role
+    // Admin Override Button visibility based on current role (B8 requirement: ONLY when role is admin)
     const adminBtn = el("btn-attempt-admin-delete");
     const isAdmin = state.currentUser && state.currentUser.role === "admin";
     if (adminBtn) {
@@ -534,24 +556,28 @@
     const icon = el("outcome-icon");
 
     banner.style.display = "flex";
-    if (result.outcome === "DENIED") {
+    const outcome = (result.outcome || "ERROR").toUpperCase();
+
+    if (outcome === "DENIED") {
       banner.className = "delete-outcome-banner banner-denied";
       badge.className = "outcome-badge outcome-denied";
-      badge.textContent = "DENIED (WORM Lock Enforced)";
+      badge.textContent = "DENIED";
       icon.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
-      reason.textContent = result.reason || "Object is protected by S3 Object Lock Governance mode.";
-    } else if (result.outcome === "DELETED") {
+      reason.textContent = result.reason || "AccessDenied: Object is locked by S3 Object Lock Governance mode.";
+    } else if (outcome === "DELETED") {
       banner.className = "delete-outcome-banner banner-deleted";
       badge.className = "outcome-badge outcome-deleted";
-      badge.textContent = result.bypassUsed ? "DELETED (Governance Bypass Used)" : "DELETED";
+      badge.textContent = "DELETED";
       icon.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
-      reason.textContent = "S3 accepted the delete request via authorized IAM privileged credentials.";
+      reason.textContent = result.bypassUsed
+        ? "S3 accepted the delete request via authorized governance bypass (s3:BypassGovernanceRetention)."
+        : (result.reason || "S3 delete succeeded");
     } else {
       banner.className = "delete-outcome-banner banner-denied";
       badge.className = "outcome-badge outcome-denied";
-      badge.textContent = result.outcome || "ERROR";
+      badge.textContent = outcome;
       icon.innerHTML = "";
-      reason.textContent = result.reason || JSON.stringify(result);
+      reason.textContent = result.reason || (result.error && result.error.message) || JSON.stringify(result);
     }
   }
 
