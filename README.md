@@ -152,4 +152,28 @@ Because S3 static website endpoints are HTTP-only and modern OAuth callbacks req
    - **GitHub OAuth App**: Set **Homepage URL** to your CloudFront URL (`https://<distribution-id>.cloudfront.net`).
    - **Lambda `github-oauth-callback`**: Set environment variable `FRONTEND_URL=https://<distribution-id>.cloudfront.net`.
 
+---
+
+## 8. Full End-to-End Acceptance (V10)
+
+The complete story of the project proves that write-once audit records cannot be tampered with or deleted by standard callers, while authorized administrative governance overrides are explicitly recorded in DynamoDB and CloudTrail:
+
+| Step # | Acceptance Verification Step | Result | Architectural & Evidence Details |
+| :---: | :--- | :---: | :--- |
+| **1** | **Log in with GitHub as non-admin** | **PASS** | Evaluated on deployed frontend (`auditlock-dashboard-frontend-148737622933`). Session token safely sanitized from `#token=` fragment into `sessionStorage`. Decoded role rendered as `USER` (`auditor-compliance`). |
+| **2** | **Upload file to Object Lock vault** | **PASS** | Direct presigned PUT streamed raw audit PDF into `s3objectlock-auditlock-locked` and registered metadata in `AuditRecords`. |
+| **3** | **View catalog and record detail** | **PASS** | Real-time S3 status reconciliation verified Object Lock mode, retention duration, and legal hold state. |
+| **4** | **Attempt standard delete** | **PASS** | **DENIED**. S3 natively enforced retention; error surfaced clearly: `AccessDenied: Access Denied because object protected by object lock.` |
+| **5** | **Switch to admin account** | **PASS** | Session cleared; authenticated as `SaiNandhan06` with `ADMIN` role badge. Elevated controls unlocked in UI. |
+| **6** | **Admin governance override delete** | **PASS** | **DELETED**. Executed with `s3:BypassGovernanceRetention` bypass rights; S3 accepted delete request (`HTTP 204 No Content`). |
+| **7** | **DynamoDB RetentionEvents audit sequence** | **PASS** | Append-only audit trail captures full history with real GitHub logins (`auditor-compliance` and `SaiNandhan06`), eliminating generic placeholders. |
+| **8** | **CloudTrail Event history alignment** | **PASS** | Verified matching S3 `DeleteObject` records: denied attempt logs `errorCode: AccessDenied`, while authorized bypass logs `bypassGovernanceRetention: true`. |
+
+### Running the End-to-End Automated Test Suite
+
+```bash
+# Execute the complete V10 test suite (validates tokens, S3 Object Lock, WORM denial, and bypass)
+node lambda/verify-v10.js
+```
+
 
